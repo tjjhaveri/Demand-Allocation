@@ -176,7 +176,7 @@ def Function(raw_df,cat_preferred_Max=0.7,cat_not_preferred_Max=0.2,utilization_
     output_df = pd.concat([output_df,single_sourced_df])
     return output_df
 
-d = pd.read_excel('Data_with_Forecast.xlsx', engine='openpyxl', sheet_name= 'PCB - Chris')
+d = pd.read_excel('Data_with_Forecast.xlsx', engine='openpyxl')
 output = Function(d)
 
-output.to_excel("Allocation_Output_Revised_PCB.xlsx")
+output.to_excel("Allocation_Output.xlsx")
