@@ -3,15 +3,15 @@ from pulp import *
 
 def Function(raw_df,cat_preferred_Max=0.7,cat_not_preferred_Max=0.2,utilization_score_Min=0.95,lead_time_importance_level='Medium'):
     raw_df = raw_df.astype(dict(zip(raw_df.columns,[str,str,str,str,'float64','float64','float64','float64'])))
-    raw_df['Capacity_Quantity'] = raw_df['Capacity']*raw_df['Tesla_Demand']
+    raw_df['Demand_Quantity'] = raw_df['Demand']*raw_df['Company_Demand']
     #remove banned supplier
     df = raw_df[raw_df['Supplier_Preference']!='ban']
     #extract single sourced
-    max_vendor_number_df = df.copy()[['Vendor_Name','TPN']].groupby('TPN').count().reset_index()
-    single_sourced = list(max_vendor_number_df[max_vendor_number_df['Vendor_Name']==1]['TPN'])
+    max_vendor_number_df = df.copy()[['Vendor_Name','CPN']].groupby('CPN').count().reset_index()
+    single_sourced = list(max_vendor_number_df[max_vendor_number_df['Vendor_Name']==1]['CPN'])
     single_sourced_df = df[df['TPN'].isin(single_sourced)]
-    multi_sourced = list(max_vendor_number_df[max_vendor_number_df['Vendor_Name']>1]['TPN'])
-    df = df[df['TPN'].isin(multi_sourced)]
+    multi_sourced = list(max_vendor_number_df[max_vendor_number_df['Vendor_Name']>1]['CPN'])
+    df = df[df['CPN'].isin(multi_sourced)]
     print(single_sourced_df)
 
 
@@ -23,20 +23,20 @@ def Function(raw_df,cat_preferred_Max=0.7,cat_not_preferred_Max=0.2,utilization_
     lead_time_importance = lead_time_importance_dict[lead_time_importance_level]
     #vendor list and part list
     vendors = list(df.Vendor_Name.unique())
-    parts = list(df.TPN.unique())
+    parts = list(df.CPN.unique())
     categories = list(df.Component_Category.unique())
     #production cost data formating
-    cost_df = pd.pivot_table(df[['Vendor_Name','TPN','Pricing_per_Item']],values='Pricing_per_Item',index='TPN',columns='Vendor_Name').fillna(0.0)
+    cost_df = pd.pivot_table(df[['Vendor_Name','CPN','Pricing_per_Item']],values='Pricing_per_Item',index='CPN',columns='Vendor_Name').fillna(0.0)
     cost = {parts[i]:{vendors[j]:cost_df.loc[parts[i],vendors[j]] for j in range(len(vendors))} for i in range(len(parts))}
     #production capacity data formating
-    production_capacity_df =  pd.pivot_table(df[['Vendor_Name','TPN','Capacity_Quantity']],values='Capacity_Quantity',index='TPN',columns='Vendor_Name').fillna(0.0)
+    production_capacity_df =  pd.pivot_table(df[['Vendor_Name','CPN','Demand_Quantity']],values='Demand_Quantity',index='CPN',columns='Vendor_Name').fillna(0.0)
     production_capacity = {parts[i]:{vendors[j]:production_capacity_df.loc[parts[i],vendors[j]] for j in range(len(vendors))} for i in range(len(parts))}
     #lead time data formating
     lead_time_df = df.copy()[['Vendor_Name','Lead_Time_wks']].drop_duplicates()
     lead_time = dict(zip(lead_time_df['Vendor_Name'],lead_time_df['Lead_Time_wks']))
     #demand data formating
-    demand_df = df.copy()[['TPN','Tesla_Demand']].drop_duplicates()
-    demand = dict(zip(demand_df['TPN'],demand_df['Tesla_Demand']))
+    demand_df = df.copy()[['CPN','Company_Demand']].drop_duplicates()
+    demand = dict(zip(demand_df['CPN'],demand_df['Company_Demand']))
     #supplier score data formating
     supplier_score_df = df[['Vendor_Name','Component_Category','Supplier_Preference']].groupby(['Vendor_Name','Component_Category','Supplier_Preference']).sum().reset_index()
     supplier_score = {cat: {} for cat in categories}
@@ -45,7 +45,7 @@ def Function(raw_df,cat_preferred_Max=0.7,cat_not_preferred_Max=0.2,utilization_
         supplier_score[cat]=dict(zip(temp['Vendor_Name'],temp['Supplier_Preference']))
     #max vendor numbers data formating
     max_vendor_number_df[max_vendor_number_df['Vendor_Name'] > 6] = 6
-    max_vendor_number = dict(zip(max_vendor_number_df['TPN'],max_vendor_number_df['Vendor_Name']))
+    max_vendor_number = dict(zip(max_vendor_number_df['CPN'],max_vendor_number_df['Vendor_Name']))
 
     # define decision variables
     allocation = [(part,vendor) for part in parts for vendor in vendors]
@@ -93,12 +93,12 @@ def Function(raw_df,cat_preferred_Max=0.7,cat_not_preferred_Max=0.2,utilization_
 
     # 6.
     # find exemption part and exclude from part list
-    not_high_list = set(df[df.Supplier_Preference != 'high']['TPN'].unique())
+    not_high_list = set(df[df.Supplier_Preference != 'high']['CPN'].unique())
     exclude_part = list(not_high_list.difference(set(parts)))
 
     for cat in categories:
         print(cat)
-        all_temp_part_list = list(df[df.Component_Category == cat]['TPN'])
+        all_temp_part_list = list(df[df.Component_Category == cat]['CPN'])
         temp_vendor_list = list(df[df.Component_Category == cat]['Vendor_Name'].unique())
         temp_part_list = [part for part in all_temp_part_list if part not in exclude_part]
         for part in temp_part_list:
@@ -152,9 +152,9 @@ def Function(raw_df,cat_preferred_Max=0.7,cat_not_preferred_Max=0.2,utilization_
             try:
                 if cost[part][vendor] > 0:
                     var_output = {
-                        'Telsa PN': part,
+                        'Customer PN': part,
                         'Vendors': vendor,
-                        '2020 Price': round(cost[part][vendor], 5),
+                        '2023 Price': round(cost[part][vendor], 5),
                         'Lead Time': lead_time[vendor],
                         'Supplier Preference': supplier_score[cat][vendor],
                         'Capacity': round(production_capacity[part][vendor] / demand[part], 3),
@@ -164,12 +164,12 @@ def Function(raw_df,cat_preferred_Max=0.7,cat_not_preferred_Max=0.2,utilization_
                 output.append(var_output)
             except:
                 pass
-    output_df = pd.DataFrame.from_records(output).sort_values(['Telsa PN', 'Vendors'])
-    output_df.set_index(['Telsa PN', 'Vendors'], inplace=True)
+    output_df = pd.DataFrame.from_records(output).sort_values(['Customer PN', 'Vendors'])
+    output_df.set_index(['Customer PN', 'Vendors'], inplace=True)
     output_df = output_df.reset_index()
     print(single_sourced_df.columns)
-    single_sourced_df = single_sourced_df[['TPN','Vendor_Name','Pricing_per_Item','Lead_Time_wks','Supplier_Preference','Capacity','Capacity','Tesla_Demand']]
-    single_sourced_df.columns = ['Telsa PN', 'Vendors', '2023 Price', 'Lead Time', 'Supplier Preference', 'Capacity',\
+    single_sourced_df = single_sourced_df[['CPN','Vendor_Name','Pricing_per_Item','Lead_Time_wks','Supplier_Preference','Capacity','Capacity','Company_Demand']]
+    single_sourced_df.columns = ['Customer PN', 'Vendors', '2023 Price', 'Lead Time', 'Supplier Preference', 'Capacity',\
        'Allocation Fraction', 'Allocation Quantity']
     output_df = pd.concat([output_df,single_sourced_df])
     return output_df
