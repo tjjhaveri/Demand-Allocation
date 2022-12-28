@@ -16,6 +16,8 @@ def Function(raw_df,cat_preferred_Max=0.7,cat_not_preferred_Max=0.2,utilization_
 
 
     # define this as a minimization problem
+    
+    
     prob = LpProblem("Component_Allocation",LpMinimize)
     #solver = pulp.PULP_CBC_CMD(keepFiles=True)
     #lead time importance
